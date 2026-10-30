@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from .base import ExtractionResult, Extractor, Usage
+from .batch import BatchInput, BatchResult, BatchRun, extract_many
 from .evaluate import EvalReport, Example, evaluate, load_dataset
 from .hybrid import HybridExtractor
 from .llm import LLMExtractor
@@ -20,6 +21,9 @@ __version__ = "0.1.0"
 
 __all__ = [
     "AnthropicProvider",
+    "BatchInput",
+    "BatchResult",
+    "BatchRun",
     "Completion",
     "EvalReport",
     "Example",
@@ -38,6 +42,7 @@ __all__ = [
     "Usage",
     "__version__",
     "evaluate",
+    "extract_many",
     "json_schema",
     "load_dataset",
 ]

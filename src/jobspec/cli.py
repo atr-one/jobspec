@@ -1,4 +1,4 @@
-"""Command line: ``jobspec extract``, ``jobspec eval``, ``jobspec schema``, ``jobspec estimate``."""
+"""Command line: ``jobspec extract``, ``batch``, ``eval``, ``schema`` and ``estimate``."""
 
 from __future__ import annotations
 
@@ -6,10 +6,11 @@ import argparse
 import json
 import os
 import sys
-from typing import List, Optional
+from typing import IO, Iterator, List, Optional
 
 from . import __version__
 from .base import Extractor
+from .batch import BatchResult, done_in_output, extract_many, read_jsonl, write_jsonl
 from .evaluate import evaluate, load_dataset
 from .hybrid import HybridExtractor
 from .llm import LLMExtractor, build_prompt
@@ -78,6 +79,63 @@ def cmd_extract(args: argparse.Namespace) -> int:
         print(f"error: {result.error}", file=sys.stderr)
         return 1
     return 0
+
+
+def _money(value: Optional[float]) -> str:
+    return "n/a (no price for this model)" if value is None else f"${value:.4f}"
+
+
+def cmd_batch(args: argparse.Namespace) -> int:
+    if args.workers < 1:
+        raise ValueError("--workers must be at least 1")
+    if args.max_cost is not None and args.max_cost <= 0:
+        raise ValueError("--max-cost must be positive")
+    skip_ids, skip_lines = done_in_output(args.out) if args.resume else (set(), set())
+    extractor = _make_extractor(args)
+    workers = 1 if extractor.name == "rules" else args.workers
+    source: IO[str] = sys.stdin if args.input == "-" else open(args.input, encoding="utf-8")  # noqa: SIM115
+    interrupted = False
+    try:
+        inputs = read_jsonl(source, args.text_field, args.id_field, skip_ids, skip_lines)
+        run = extract_many(inputs, extractor, workers=workers, max_cost=args.max_cost)
+        results: Iterator[BatchResult] = iter(run)
+        with open(args.out, "a" if args.resume else "w", encoding="utf-8", newline="\n") as out:
+            try:
+                write_jsonl(results, out)
+            except KeyboardInterrupt:
+                interrupted = True
+                close = getattr(results, "close", None)
+                if close is not None:
+                    close()
+    finally:
+        if source is not sys.stdin:
+            source.close()
+    usage = run.usage
+    print(
+        "records written: {} (failed: {}{})".format(
+            run.count,
+            run.failures,
+            f", already done: {len(skip_ids) + len(skip_lines)}" if args.resume else "",
+        ),
+        file=sys.stderr,
+    )
+    if usage.calls:
+        print(
+            f"LLM calls: {usage.calls}   tokens in / out: {usage.input_tokens} / {usage.output_tokens}"
+            f"   cost: {_money(usage.cost_usd)}",
+            file=sys.stderr,
+        )
+    else:
+        print("LLM calls: 0   cost: $0", file=sys.stderr)
+    print(f"elapsed: {run.elapsed_s:.1f} s", file=sys.stderr)
+    if interrupted:
+        print("interrupted: run again with --resume to continue", file=sys.stderr)
+        return 130
+    if run.stopped:
+        print(f"stopped before the end of the input: {run.stop_reason}", file=sys.stderr)
+        print("run again with --resume (and a higher --max-cost) to continue", file=sys.stderr)
+        return 3
+    return 1 if run.failures else 0
 
 
 def cmd_eval(args: argparse.Namespace) -> int:
@@ -164,6 +222,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--meta", action="store_true", help="include per-field source/confidence and run info")
     _add_llm_options(p)
     p.set_defaults(func=cmd_extract)
+
+    p = sub.add_parser("batch", help="extract a JSONL file of postings to a JSONL file of records")
+    p.add_argument("--in", dest="input", required=True, help="JSONL with one posting per line (- for stdin)")
+    p.add_argument("--out", required=True, help="output JSONL: one record per input line, in input order")
+    p.add_argument("--extractor", choices=["rules", "llm", "hybrid"], default="rules")
+    p.add_argument("--text-field", default="text", help="key of the posting text (default: text)")
+    p.add_argument("--id-field", default="id", help="key of the posting id (default: id)")
+    p.add_argument("--workers", type=int, default=4, help="parallel LLM calls (default 4; rules run in one thread)")
+    p.add_argument("--max-cost", type=float, help="stop before the total LLM cost could exceed this (USD)")
+    p.add_argument("--resume", action="store_true", help="append to --out, skipping ids already in it")
+    _add_llm_options(p)
+    p.set_defaults(func=cmd_batch)
 
     p = sub.add_parser("eval", help="score an extractor against labeled JSONL")
     p.add_argument("--data", required=True, help="JSONL with id, text, label")

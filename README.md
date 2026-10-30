@@ -83,6 +83,59 @@ the environment variable with the key; defaults are `ANTHROPIC_API_KEY` and `OPE
 `--max-tokens`, `--timeout`, `--prices prices.json`, and `--threshold` for the hybrid extractor.
 `--fail-under 0.9` makes `eval` exit with status 1 below a macro accuracy, for CI.
 
+## Batch mode
+
+`jobspec batch` extracts a JSONL file of postings into a JSONL file of records:
+
+```bash
+jobspec batch --in postings.jsonl --out records.jsonl --extractor rules
+jobspec batch --in postings.jsonl --out records.jsonl --extractor hybrid --workers 8 --max-cost 5
+jobspec batch --in postings.jsonl --out records.jsonl --extractor hybrid --workers 8 --max-cost 10 --resume
+```
+
+- **Input** is read one line at a time, so the file can be larger than memory (`--in -` reads
+  stdin). Each line is a JSON object; the posting text is in `--text-field` (default `text`) and
+  its id in `--id-field` (default `id`). An optional `"format": "html"` or `"text"` is honored.
+- **Output** has one line per input line, in input order:
+
+  ```json
+  {"id": "p17", "line": 17, "record": {...JobSpec...}, "meta": {"salary": {"source": "rule", "confidence": 0.95}},
+   "errors": [], "warnings": [], "usage": {"calls": 1, "input_tokens": 812, "output_tokens": 140, "cost_usd": 0.00015},
+   "latency_ms": 930.4}
+  ```
+
+  Ids are written as strings. A line that is not valid JSON, is not an object, or has no string
+  in the text field is written with `"record": null` and the reason in `errors`; it does not stop
+  the run. A failed LLM call is reported the same way (with the rule values, for `hybrid`).
+- **Workers.** `llm` and `hybrid` send up to `--workers` requests at a time (default 4). The rule
+  extractor is CPU-bound and always runs in one thread.
+- **Cost limit.** With `--max-cost USD` the run stops before a posting that could take the total
+  cost past the limit. The cost of a call is known only after it returns, so the most expensive
+  posting so far serves as the estimate for each posting still to be sent, counting those in
+  flight; until the first call returns only one posting is in flight. The limit can therefore be
+  exceeded only by a posting that costs more than every posting before it. A model without a price
+  has an unknown cost, and the run stops after its first call.
+- **Resume.** `--resume` appends to `--out` and skips every input id already in it (and, for lines
+  without an id, the same line number). A last output line cut off by a crash is removed first.
+  A record with errors counts as done; delete its line to retry it.
+- **Summary.** At the end the command prints, on stderr, the number of records written, failures,
+  LLM calls, input and output tokens, cost and elapsed time. Exit status: 0 when every record was
+  extracted without error, 1 when some records have errors, 3 when the cost limit stopped the run,
+  130 after Ctrl-C (the records written so far are kept; run again with `--resume`).
+
+From code, `extract_many` does the same for any iterable of texts, `(id, text)` pairs or
+`BatchInput` objects, and yields results in input order:
+
+```python
+from jobspec import LLMExtractor, AnthropicProvider, extract_many
+
+rows = ((row["id"], row["text"]) for row in my_postings)
+run = extract_many(rows, LLMExtractor(AnthropicProvider()), workers=4, max_cost=2.0)
+for item in run:
+    print(item.id, item.errors or item.result.spec.title)
+print(run.count, run.failures, run.usage.cost_usd, run.elapsed_s, run.stopped)
+```
+
 ## Library
 
 ```python
