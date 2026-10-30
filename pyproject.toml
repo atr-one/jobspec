@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jobspec-ai"
-version = "0.1.0"
+version = "0.2.0"
 description = "Turn raw job postings into structured, validated records with rule-based and LLM extractors, and measure them against labeled data."
 readme = "README.md"
 license = "MIT"

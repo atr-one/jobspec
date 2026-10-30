@@ -8,6 +8,8 @@ precision and recall look only at stated values.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import time
 import unicodedata
@@ -329,6 +331,17 @@ class EvalReport:
         for key, value in self.totals():
             lines.append(f"| {key} | {value} |")
         return "\n".join(lines) + "\n"
+
+    def to_csv(self) -> str:
+        """One row per scored field (salary parts included); empty cells for undefined metrics."""
+        buffer = io.StringIO()
+        writer = csv.writer(buffer, lineterminator="\n")
+        writer.writerow(["field", "accuracy", "precision", "recall", "f1", "n", "gold_count", "pred_count", "tp"])
+        for name in EVAL_FIELDS:
+            s = self.fields[name]
+            metrics = ["" if v is None else f"{v:.4f}" for v in (s.accuracy, s.precision, s.recall, s.f1)]
+            writer.writerow([name, *metrics, s.n, s.gold_count, s.pred_count, s.tp])
+        return buffer.getvalue()
 
     def to_dict(self) -> Dict[str, Any]:
         usage = self.usage

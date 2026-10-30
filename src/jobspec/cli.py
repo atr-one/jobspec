@@ -151,23 +151,31 @@ def cmd_eval(args: argparse.Namespace) -> int:
     report = evaluate(extractor, examples, args.data, progress)
     if extractor.name != "rules":
         print("", file=sys.stderr)
-    print(report.to_text())
+    # with --format csv stdout carries only the CSV; everything else goes to stderr
+    notes: IO[str] = sys.stderr if args.format == "csv" else sys.stdout
+    if args.format == "csv":
+        sys.stdout.write(report.to_csv())
+    else:
+        print(report.to_text())
     if args.errors:
-        print("\nmismatches:")
+        print("\nmismatches:", file=notes)
         for item in report.items:
             for name, diff in item.mismatches.items():
                 gold = json.dumps(diff["gold"], ensure_ascii=False)
                 pred = json.dumps(diff["pred"], ensure_ascii=False)
-                print(f"  {item.id:<8} {name:<22} gold={gold} pred={pred}")
+                print(f"  {item.id:<8} {name:<22} gold={gold} pred={pred}", file=notes)
             if item.error:
-                print(f"  {item.id:<8} error: {item.error}")
+                print(f"  {item.id:<8} error: {item.error}", file=notes)
     if args.report:
-        with open(args.report, "w", encoding="utf-8") as fh:
-            if args.report.lower().endswith(".json"):
+        lower = args.report.lower()
+        with open(args.report, "w", encoding="utf-8", newline="") as fh:
+            if lower.endswith(".json"):
                 json.dump(report.to_dict(), fh, ensure_ascii=False, indent=2)
+            elif lower.endswith(".csv"):
+                fh.write(report.to_csv())
             else:
                 fh.write(report.to_markdown())
-        print(f"\nreport written to {args.report}")
+        print(f"\nreport written to {args.report}", file=notes)
     if args.fail_under is not None:
         macro = report.macro("accuracy") or 0.0
         if macro < args.fail_under:
@@ -239,7 +247,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--data", required=True, help="JSONL with id, text, label")
     p.add_argument("--extractor", choices=["rules", "llm", "hybrid"], default="rules")
     p.add_argument("--limit", type=int, help="only the first N postings")
-    p.add_argument("--report", help="write a report: .json or .md")
+    p.add_argument("--report", help="write a report: .json, .csv or .md")
+    p.add_argument(
+        "--format",
+        choices=["text", "csv"],
+        default="text",
+        help="stdout format: a text table (default) or CSV with one row per field",
+    )
     p.add_argument("--errors", action="store_true", help="list every mismatching field")
     p.add_argument("--fail-under", type=float, help="exit 1 if macro accuracy is below this")
     _add_llm_options(p)

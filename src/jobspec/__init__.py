@@ -17,7 +17,7 @@ from .providers import AnthropicProvider, Completion, OpenAICompatibleProvider, 
 from .rules import RuleExtractor
 from .schema import FieldMeta, JobSpec, Salary, SchemaError, json_schema
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "AnthropicProvider",

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import csv
+import io
 import json
 from pathlib import Path
 
 import pytest
 
 from jobspec.cli import main
+from jobspec.evaluate import EVAL_FIELDS
 
 from .conftest import DATA
 
@@ -62,3 +65,17 @@ def test_missing_file_is_a_clean_error(capsys: pytest.CaptureFixture[str]) -> No
 
 def test_no_command_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
     assert main([]) == 2
+
+
+def test_eval_csv_format(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    data = str(DATA / "eval.jsonl")
+    assert main(["eval", "--data", data, "--format", "csv", "--limit", "3", "--errors"]) == 0
+    captured = capsys.readouterr()
+    rows = list(csv.reader(io.StringIO(captured.out)))
+    assert rows[0] == ["field", "accuracy", "precision", "recall", "f1", "n", "gold_count", "pred_count", "tp"]
+    assert [r[0] for r in rows[1:]] == list(EVAL_FIELDS)
+    assert all(r[5] == "3" for r in rows[1:])
+    assert "mismatches:" in captured.err and "macro accuracy" not in captured.out
+    report = tmp_path / "r.csv"
+    assert main(["eval", "--data", data, "--limit", "3", "--report", str(report)]) == 0
+    assert report.read_text(encoding="utf-8") == captured.out

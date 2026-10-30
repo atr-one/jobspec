@@ -63,6 +63,7 @@ Evaluate an extractor against labeled data:
 jobspec eval --data data/eval.jsonl --extractor rules
 jobspec eval --data data/eval.jsonl --extractor rules --errors          # list every mismatch
 jobspec eval --data data/eval.jsonl --extractor llm --report llm.md     # or .json
+jobspec eval --data data/eval.jsonl --extractor rules --format csv > rules.csv   # one row per field
 jobspec eval --data data/eval.jsonl --extractor llm --provider openai --model gpt-4.1-mini
 jobspec eval --data data/eval.jsonl --extractor llm --provider openai \
     --base-url http://localhost:11434/v1 --model llama3.1
