@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from ..text import Document
 from ..vocab import COUNTRIES, COUNTRY_CODES_EXACT, REGIONS, REGIONS_EXACT
@@ -64,10 +64,67 @@ _REGION_LEAD = re.compile(
 )
 
 
+# Office days written as weekdays: "in our Boston office Tuesday through Thursday".
+_WEEKDAYS: List[Tuple[str, int]] = [
+    (r"mon(?:day)?s?|montags?|lunes|segunda(?:s)?-feiras?|понедельник\w*", 0),
+    (r"tue(?:s(?:day)?)?s?|dienstags?|martes|ter[çc]a(?:s)?-feiras?|вторник\w*", 1),
+    (r"wed(?:nesday)?s?|mittwochs?|mi[ée]rcoles|quarta(?:s)?-feiras?|сред[аыу]", 2),
+    (r"thu(?:r(?:s(?:day)?)?)?s?|donnerstags?|jueves|quinta(?:s)?-feiras?|четверг\w*", 3),
+    (r"fri(?:day)?s?|freitags?|viernes|sexta(?:s)?-feiras?|пятниц\w*", 4),
+]
+_DAY = re.compile(
+    "|".join(rf"(?P<d{i}>(?<![^\W\d_])(?:{p})(?![^\W\d_]))" for i, (p, _) in enumerate(_WEEKDAYS)),
+    re.IGNORECASE,
+)
+_DAY_RANGE_WORD = re.compile(r"^\s*(?:-|–|—|through|thru|to|until|till|bis|a|hasta|à|até|по|до)\s*$", re.IGNORECASE)
+_OFFICE_CLAUSE = re.compile(
+    r"\b(?:in|at|from|to|into)\s+(?:the\s+|our\s+|an?\s+)?(?:[\w-]+\s+){0,2}?(?:office|hq|headquarters|studio|campus)\b|"
+    r"\bon[- ]?site\b|\bin[- ]person\b|\bim\s+(?:\w+\s+)?b[üu]ro\b|\b(?:en\s+la|na|no)\s+(?:\w+\s+)?"
+    r"(?:oficina|escrit[óo]rio|sede)\b|\bв\s+офис\w*",
+    re.IGNORECASE,
+)
+_HOME_CLAUSE = re.compile(
+    r"\b(?:from|at)\s+home\b|\bremotely\b|\bwork(?:ing)?\s+remote\b|\bwfh\b|\bhome\s*office\b|\bvon\s+zu\s*hause\b|"
+    r"\bmobil(?:es)?\s+arbeiten\b|\bdesde\s+casa\b|\bem\s+casa\b|\bудал[её]нно\b|\bиз\s+дома\b",
+    re.IGNORECASE,
+)
+# "the office is open on Fridays if you like": a remote job with an optional office
+_OPTIONAL = re.compile(
+    r"\boptional\b|\bif\s+you\s+(?:like|want|wish)\b|\bwelcome\s+to\b|\boccasional(?:ly)?\b|\bclosed\b|"
+    r"\bfreiwillig\b|\bopcional\b",
+    re.IGNORECASE,
+)
+
+
+def _day_index(m: re.Match[str]) -> int:
+    for i in range(len(_WEEKDAYS)):
+        if m.group(f"d{i}"):
+            return i
+    return -1  # pragma: no cover - one group always matches
+
+
+def weekday_hybrid(text: str) -> bool:
+    """True when a sentence puts some, not all, weekdays in the office (or the rest at home)."""
+    for sentence in re.split(r"[.;!?\n]+", text):
+        days = list(_DAY.finditer(sentence))
+        if not days or not _OFFICE_CLAUSE.search(sentence) or _OPTIONAL.search(sentence):
+            continue
+        if _HOME_CLAUSE.search(sentence):
+            return True
+        office: Set[int] = set()
+        for a, b in zip(days, days[1:]):
+            if _DAY_RANGE_WORD.match(sentence[a.end() : b.start()]):
+                office.update(range(_day_index(a), _day_index(b) + 1))
+        office.update(_day_index(m) for m in days)
+        if 1 <= len(office) <= 4:
+            return True
+    return False
+
+
 def _classify(value: str) -> Optional[str]:
     if _NOT_REMOTE.search(value):
-        return "hybrid" if _HYBRID.search(value) else "onsite"
-    if _HYBRID.search(value):
+        return "hybrid" if _HYBRID.search(value) or weekday_hybrid(value) else "onsite"
+    if _HYBRID.search(value) or weekday_hybrid(value):
         return "hybrid"
     if _REMOTE.search(_REMOTE_FALSE.sub(" ", value)):
         return "remote"
@@ -87,9 +144,11 @@ def extract_work_mode(doc: Document, title: Optional[str] = None) -> Optional[Tu
         return mode, 0.9
     text = doc.text
     if _NOT_REMOTE.search(text):
-        return ("hybrid", 0.8) if _HYBRID.search(text) else ("onsite", 0.8)
+        return ("hybrid", 0.8) if _HYBRID.search(text) or weekday_hybrid(text) else ("onsite", 0.8)
     if _HYBRID.search(text):
         return "hybrid", 0.85
+    if weekday_hybrid(text):
+        return "hybrid", 0.75
     remote = _REMOTE.search(_REMOTE_FALSE.sub(" ", text))
     if remote and not _STRICT_ONSITE.search(text):
         return "remote", 0.8

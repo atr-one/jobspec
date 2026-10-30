@@ -198,51 +198,95 @@ inferred); LLM confidences are a constant (0.7 by default), not a calibrated pro
 
 ## Rule extractor results
 
-On the bundled data (`jobspec eval --data data/eval.jsonl --extractor rules`, 30 postings):
+There are three labeled sets, all synthetic (see [data/README.md](data/README.md)). They differ in
+how much the rules have seen them, and that matters more than the numbers themselves:
 
-| field | accuracy | precision | recall | F1 | gold values |
-|---|---:|---:|---:|---:|---:|
-| title | 1.00 | 1.00 | 1.00 | 1.00 | 30 |
-| seniority | 1.00 | 1.00 | 1.00 | 1.00 | 22 |
-| employment_type | 1.00 | 1.00 | 1.00 | 1.00 | 24 |
-| work_mode | 1.00 | 1.00 | 1.00 | 1.00 | 30 |
-| locations | 0.97 | 1.00 | 0.94 | 0.97 | 18 |
-| remote_regions | 0.97 | 0.93 | 1.00 | 0.97 | 14 |
-| salary (all five parts right) | 1.00 | 1.00 | 1.00 | 1.00 | 29 |
-| experience_years_min | 1.00 | 1.00 | 1.00 | 1.00 | 27 |
-| tech_stack | 1.00 | 1.00 | 1.00 | 1.00 | 131 |
-| visa_sponsorship | 1.00 | 1.00 | 1.00 | 1.00 | 9 |
-| apply_url | 1.00 | 1.00 | 1.00 | 1.00 | 18 |
-| apply_email | 1.00 | 1.00 | 1.00 | 1.00 | 12 |
+| set | postings | relation to the rules |
+|---|---:|---|
+| `data/eval.jsonl` | 30 | the rules were written together with it: in-sample |
+| `data/dev.jsonl` | 12 | the 0.1.0 held-out set; the 0.2.0 rule fixes were made by looking at its misses, so it is no longer held out |
+| `data/holdout.jsonl` | 12 | written for 0.2.0 without running the rules on it, then evaluated once after the rules were final; nothing was changed afterwards |
 
-Macro accuracy over the 12 fields: 0.994. Macro F1: 0.995. Average latency: about 6 ms per
-posting on a laptop. Cost: zero.
+Accuracy counts an agreed "not stated" as correct; F1 looks only at stated values. The salary row
+requires all five parts (min, max, currency, period, gross/net) to be right.
 
-**Read this number with care.** The rules were written together with these 30 postings, so this is
-an in-sample score. To get a fairer estimate, `data/holdout.jsonl` (12 postings) was written after
-the rules were frozen and run once, without changes afterwards:
+**eval.jsonl (in-sample)**, `jobspec eval --data data/eval.jsonl --extractor rules`:
 
-| field | accuracy | F1 |
-|---|---:|---:|
-| title | 1.00 | 1.00 |
-| seniority | 1.00 | 1.00 |
-| employment_type | 0.83 | 0.89 |
-| work_mode | 0.92 | 0.96 |
-| locations | 0.42 | 0.22 |
-| remote_regions | 0.92 | 0.86 |
-| salary | 1.00 | 1.00 |
-| experience_years_min | 0.92 | 0.95 |
-| tech_stack | 1.00 | 1.00 |
-| visa_sponsorship | 0.92 | 0.67 |
-| apply_url | 1.00 | 1.00 |
-| apply_email | 1.00 | 1.00 |
+| field | accuracy | F1 | gold values |
+|---|---:|---:|---:|
+| title | 1.00 | 1.00 | 30 |
+| seniority | 1.00 | 1.00 | 22 |
+| employment_type | 1.00 | 1.00 | 24 |
+| work_mode | 1.00 | 1.00 | 30 |
+| locations | 1.00 | 1.00 | 18 |
+| remote_regions | 0.97 | 0.97 | 14 |
+| salary | 1.00 | 1.00 | 29 |
+| experience_years_min | 1.00 | 1.00 | 27 |
+| tech_stack | 1.00 | 1.00 | 131 |
+| visa_sponsorship | 1.00 | 1.00 | 9 |
+| apply_url | 1.00 | 1.00 | 18 |
+| apply_email | 1.00 | 1.00 | 12 |
 
-Macro accuracy on the held-out set: 0.910, macro F1: 0.878. The misses are informative:
-locations written without a "Location:" label, hybrid work described only by weekdays
-("Tuesday through Thursday in our Boston office"), "4 or more years", work-permit sponsorship
-without the word "visa", PJ (a Brazilian contractor term) not being recognized, and "B2B SaaS
-company" being read as a B2B contract. Expect real postings, which are longer and messier, to
-score lower still. Both sets are synthetic; see [data/README.md](data/README.md).
+Macro accuracy 0.997, macro F1 0.997 (0.994 / 0.995 with 0.1.0).
+
+**dev.jsonl (tuned on)**, `jobspec eval --data data/dev.jsonl --extractor rules`:
+
+| field | accuracy | F1 | gold values |
+|---|---:|---:|---:|
+| title | 1.00 | 1.00 | 12 |
+| seniority | 1.00 | 1.00 | 6 |
+| employment_type | 1.00 | 1.00 | 9 |
+| work_mode | 1.00 | 1.00 | 12 |
+| locations | 1.00 | 1.00 | 8 |
+| remote_regions | 1.00 | 1.00 | 4 |
+| salary | 1.00 | 1.00 | 12 |
+| experience_years_min | 1.00 | 1.00 | 10 |
+| tech_stack | 1.00 | 1.00 | 45 |
+| visa_sponsorship | 1.00 | 1.00 | 2 |
+| apply_url | 1.00 | 1.00 | 7 |
+| apply_email | 1.00 | 1.00 | 5 |
+
+Macro accuracy 1.000, macro F1 1.000. With 0.1.0, before the fixes, the same postings scored
+0.910 / 0.878. The fixes covered hybrid work described only by weekdays, "4 or more years", PJ
+(the Brazilian contractor regime), work-permit sponsorship without the word "visa", "B2B SaaS
+company" read as a B2B contract, "innerhalb Deutschlands", and locations without a "Location:"
+label (header lines such as "Dublin, Ireland - on-site", "Ciudad:", "from our Boston office").
+Each has unit tests written separately from the postings. A perfect score here shows that the
+fixes work on the cases they were written for, nothing more.
+
+**holdout.jsonl (held out)**, `jobspec eval --data data/holdout.jsonl --extractor rules`, run once:
+
+| field | accuracy | F1 | gold values |
+|---|---:|---:|---:|
+| title | 0.92 | 0.92 | 12 |
+| seniority | 1.00 | 1.00 | 9 |
+| employment_type | 0.83 | 0.90 | 11 |
+| work_mode | 0.83 | 0.87 | 12 |
+| locations | 0.75 | 0.73 | 7 |
+| remote_regions | 1.00 | 1.00 | 6 |
+| salary | 0.92 | 0.92 | 12 |
+| experience_years_min | 0.92 | 0.95 | 10 |
+| tech_stack | 0.92 | 0.99 | 46 |
+| visa_sponsorship | 0.92 | 0.89 | 5 |
+| apply_url | 1.00 | 1.00 | 8 |
+| apply_email | 1.00 | 1.00 | 4 |
+
+Macro accuracy 0.917, macro F1 0.930. Average latency: about 7 ms per posting on a laptop. Cost:
+zero. This is the number to quote for the rule extractor. The misses, left unfixed so that the set
+stays held out:
+
+- a French posting (French is not a supported language): employment type (CDI), hybrid
+  ("Télétravail : 2 jours par semaine"), location ("Lieu :") and "3 ans d'expérience" all missed;
+- "Contrato sem termo" (Portuguese for permanent) not read as full-time, and residence-permit
+  support ("autorização de residência") not read as sponsorship;
+- "Junior Data Analyst (m/w/d) – Teilzeit": the "– Teilzeit" suffix stays in the title;
+- a collective-agreement minimum ("Mindestgehalt ... Überzahlung möglich") read as a fixed salary
+  instead of a minimum only;
+- "Go" in "Senior Go-разработчик" / "разработки на Go" not counted as a technology;
+- "London, hybrid: ..." and "Melbourne, Australia" in an HTML header not read as locations;
+- "work from home up to two days per week" read as remote instead of hybrid.
+
+Expect real postings, which are longer and messier, to score lower still.
 
 ## Running the LLM evaluation with your own key
 
@@ -303,9 +347,10 @@ fields, so its output is shorter.
 
 - The rules cover English, German, Spanish, Portuguese, Russian and Hindi-English phrasing. Other
   languages will mostly get the salary, stack, URL and email right and miss the rest.
-- Locations are read from labeled lines ("Location:", "Standort:", "Город:") and a few prose
-  patterns with a list of about 100 cities. Unlabeled locations are often missed (see the held-out
-  results).
+- Locations are read from labeled lines ("Location:", "Standort:", "Город:"), from short header
+  lines that start with a known city ("Dublin, Ireland - on-site") and from a few prose patterns
+  ("from our Boston office"), with a list of about 300 cities. Other unlabeled locations are
+  missed (see the held-out results).
 - One salary per posting: the most salary-like amount wins. Separate ranges for different levels
   or locations are not represented. When no period is written, the period is inferred from the
   currency and the amount, and the confidence is lowered.
@@ -313,7 +358,7 @@ fields, so its output is shorter.
 - The tech vocabulary has about 160 entries. The rule extractor does not report anything outside
   it; the LLM extractor does.
 - Confidence values are heuristics, not calibrated probabilities.
-- The bundled data is synthetic and small (30 + 12 postings). Use it to compare extractors and to
+- The bundled data is synthetic and small (30 + 12 + 12 postings). Use it to compare extractors and to
   catch regressions. For a decision that matters, label a few hundred of your own postings in the
   same JSONL format.
 

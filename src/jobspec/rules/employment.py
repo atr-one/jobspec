@@ -10,9 +10,17 @@ from ..text import Document
 _LABEL = re.compile(
     r"^\W*(?:employment(?:\s+type)?|job\s+type|contract(?:\s+type)?|type\s+of\s+(?:employment|contract)|"
     r"engagement|tipo\s+de\s+(?:contrato|empleo|vaga|jornada)|jornada|anstellungsart|besch[äa]ftigungsart|"
-    r"vertragsart|arbeitszeit|regime(?:\s+de\s+contrata[cç][aã]o)?|тип\s+занятости|занятость|"
+    r"vertragsart|arbeitszeit|regime(?:\s+de\s+contrata[cç][aã]o)?|"
+    r"(?:forma\s+de\s+|modelo\s+de\s+|tipo\s+de\s+)?contrata[cç][aã]o|v[íi]nculo|тип\s+занятости|занятость|"
     r"формат\s+сотрудничества)\s*:\s*(?P<value>.+)$",
     re.IGNORECASE | re.MULTILINE,
+)
+
+# "B2B" is a contract form (Poland, Ukraine) but also a market: "a B2B SaaS company", "B2B sales".
+_B2B = (
+    r"\bb2b\b(?![\s-]+(?:saas|compan|startup|platform|software|product|sales|marketing|customer|client|market|"
+    r"e-?commerce|business|fintech|space|segment|tech|enterprise|brand|payment|lead|partner|integration|api|"
+    r"solution|service|world|focus|growth|account|deal)\w*)"
 )
 
 _TYPES: List[Tuple[str, re.Pattern[str]]] = [
@@ -27,7 +35,9 @@ _TYPES: List[Tuple[str, re.Pattern[str]]] = [
     (
         "contract",
         re.compile(
-            r"\bcontract(?:or)?\b(?!\s+type)|\bfreelance\w*|\bb2b\b|\bfixed[- ]term\b|\btemporary\b|\bcontrato\s+pj\b|"
+            r"\bcontract(?:or)?\b(?!\s+type)|\bfreelance\w*|"
+            + _B2B
+            + r"|\bfixed[- ]term\b|\btemporary\b|\bcontrato\s+pj\b|"
             r"\bpj\b|\bcontratista\b|\bwerkvertrag\b|\bгпх\b|\bдоговор\s+подряда\b|\bсамозанят\w*|\bконтракт\b",
             re.IGNORECASE,
         ),
@@ -54,8 +64,11 @@ _TYPES: List[Tuple[str, re.Pattern[str]]] = [
 # Statements in the body strong enough to override a "full-time" mention elsewhere.
 _STRONG_CONTRACT = re.compile(
     r"\b(?:\d+|six|three|twelve)[- ](?:month|week)s?\s+contract\b|\bcontract\s+(?:role|position|basis|engagement)\b|"
-    r"\b(?:as\s+an?\s+|independent\s+|full[- ]time\s+)contractor\b|\bon\s+a\s+contract\b|\bb2b\b|"
-    r"\bfreelance\b|\bday\s+rate\b|\boutside\s+ir35\b|\binside\s+ir35\b",
+    r"\b(?:as\s+an?\s+|independent\s+|full[- ]time\s+)contractor\b|\bon\s+a\s+contract\b|" + _B2B + r"|"
+    r"\bfreelance\b|\bday\s+rate\b|\boutside\s+ir35\b|\binside\s+ir35\b|"
+    # Brazil: PJ (pessoa jurídica) is contracting through one's own company
+    r"\b(?:regime|contrato|contrata[cç][aã]o|vaga|modelo|modalidade)\s*(?:de\s+contrata[cç][aã]o\s*)?:?\s*pj\b|"
+    r"\bpj\s*\(?\s*pessoa\s+jur[íi]dica|\bcomo\s+pj\b",
     re.IGNORECASE,
 )
 

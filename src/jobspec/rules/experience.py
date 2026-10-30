@@ -24,11 +24,22 @@ _WORDS = {
 _NUMBER = r"(?P<n>\d{1,2}|" + "|".join(_WORDS) + r")"
 _UNIT = r"(?:years?|yrs?|year's|jahre?n?|a[ñn]os?|лет|года?|saal)"
 
-# "5+ years", "3-5 years", "3 to 5 yrs", "minimum 4 years", "mindestens 3 Jahre", "al menos 2 años"
+# "or more" after the number or after the unit: "4 or more years", "5 years or more", "3 o más años"
+_OR_MORE = r"(?:or|and|oder|o|ou)\s+(?:more|above|over|mehr|m[áa]s|mais)"
+# "5+ years", "3-5 years", "3 to 5 yrs", "4 or more years", "minimum 4 years", "mindestens 3 Jahre"
 _YEARS = re.compile(
-    r"(?<![\d.,])" + _NUMBER + r"\s*(?:\+|plus)?\s*(?:(?:-|to|a|bis|до)\s*\d{1,2}\s*\+?\s*)?" + _UNIT + r"(?![^\W\d_])",
+    r"(?<![\d.,])"
+    + _NUMBER
+    + r"\s*(?:\+|plus)?\s*(?:"
+    + _OR_MORE
+    + r"\s+)?(?:(?:-|to|a|bis|до)\s*\d{1,2}\s*\+?\s*)?"
+    + _UNIT
+    + r"(?![^\W\d_])(?:\s+"
+    + _OR_MORE
+    + r"\b)?",
     re.IGNORECASE,
 )
+_PLUS = re.compile(r"\+|\bplus\b|" + _OR_MORE, re.IGNORECASE)
 # Russian puts the number after the word: "опыт работы от 3 лет", "опыт от 1 года"
 _RU = re.compile(
     r"опыт\w*[^.\n]{0,40}?(?:от|не\s+менее|более|свыше)\s*(?P<n>\d{1,2})\s*(?:-|до)?\s*(?:\d{1,2}\s*)?(?:лет|года?)\b",
@@ -70,7 +81,7 @@ def extract_experience(doc: Document, title: Optional[str] = None) -> Optional[T
         after = text[m.end() : m.end() + 50]
         if _NOT_EXPERIENCE.search(before[-25:]) or _NOT_EXPERIENCE.search(after[:25]):
             continue
-        plus = "+" in m.group(0) or "plus" in m.group(0).lower()
+        plus = bool(_PLUS.search(m.group(0)))
         in_title = title is not None and m.group(0) in title
         if plus or in_title or _CONTEXT.search(before) or _CONTEXT.search(after):
             found.append(v)

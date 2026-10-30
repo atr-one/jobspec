@@ -45,4 +45,5 @@ jobs:
       - name: Rule extractor on the bundled data
         run: |
           jobspec eval --data data/eval.jsonl --extractor rules --fail-under 0.97
+          jobspec eval --data data/dev.jsonl --extractor rules
           jobspec eval --data data/holdout.jsonl --extractor rules

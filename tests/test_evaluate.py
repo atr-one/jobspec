@@ -119,7 +119,7 @@ def test_load_dataset_errors(tmp_path: Path) -> None:
         load_dataset(str(bad))
 
 
-@pytest.mark.parametrize("name,size", [("eval.jsonl", 30), ("holdout.jsonl", 12)])
+@pytest.mark.parametrize("name,size", [("eval.jsonl", 30), ("dev.jsonl", 12), ("holdout.jsonl", 12)])
 def test_bundled_datasets_are_valid(name: str, size: int) -> None:
     examples = load_dataset(str(DATA / name))
     assert len(examples) == size
@@ -127,7 +127,7 @@ def test_bundled_datasets_are_valid(name: str, size: int) -> None:
     assert all(e.label.title and e.label.is_valid() for e in examples)
 
 
-# Measured 0.994 macro accuracy on 2026-10-30; the threshold leaves a small margin so that
+# Measured 0.997 macro accuracy with 0.2.0 (0.994 with 0.1.0); the threshold leaves a small margin so that
 # a refactor that breaks a rule fails here, while the numbers in the README stay the reference.
 RULES_MIN_MACRO_ACCURACY = 0.97
 RULES_MIN_FIELD_ACCURACY = 0.9
