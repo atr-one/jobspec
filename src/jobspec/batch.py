@@ -79,7 +79,8 @@ class BatchResult:
 PostingLike = Union[str, Tuple[Any, str], BatchInput]
 
 
-def _as_input(raw: PostingLike, index: int) -> BatchInput:
+def _as_input(raw: object, index: int) -> BatchInput:
+    # typed as object: untyped callers can pass anything, and the last line answers what does not fit
     if isinstance(raw, BatchInput):
         return raw
     if isinstance(raw, str):
