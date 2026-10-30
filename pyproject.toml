@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jobspec-ai"
+version = "0.1.0"
+description = "Turn raw job postings into structured, validated records with rule-based and LLM extractors, and measure them against labeled data."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+authors = [{ name = "Dmitrii Maslennikov" }]
+keywords = ["job posting", "information extraction", "salary parsing", "llm", "evaluation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Processing",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.5", "mypy>=1.10"]
+
+[project.scripts]
+jobspec = "jobspec.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/atr-one/jobspec"
+Issues = "https://github.com/atr-one/jobspec/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jobspec"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/jobspec", "tests", "data", "README.md", "CHANGELOG.md", "LICENSE"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = [
+    "UP006",  # typing.List etc. are kept: the code also runs on 3.7/3.8 for local testing
+    "UP007",
+    "UP035",
+    "UP045",
+    "RUF001", # non-ASCII look-alike characters are intentional (currency signs, Cyrillic)
+    "RUF002",
+    "RUF003",
+]
+
+[tool.mypy]
+python_version = "3.9"
+files = ["src/jobspec"]
+strict = true
+warn_unreachable = true
